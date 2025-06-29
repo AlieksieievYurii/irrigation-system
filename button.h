@@ -41,7 +41,7 @@ public:
           _long_press_done = true;
         }
       }
-    } else { // Handle siple click when the button released
+    } else { // Handle simple click when the button released
       _long_press_done = false;
       if (_pressed) {
         _button_state = CLICK;
@@ -53,7 +53,7 @@ public:
   }
 private:
   uint8_t _pin;
-  uint16_t _press_time = 0;
+  uint32_t _press_time = 0;
   ButtonState _button_state = NONE;
   bool _state_received = true;
   bool _pressed = false;
