@@ -13,7 +13,10 @@ class Button {
 public:
   Button(uint8_t pin) {
     _pin = pin;
-    pinMode(pin, INPUT_PULLUP);
+  }
+
+  void init() {
+    pinMode(_pin, INPUT_PULLUP);
   }
 
   ButtonState get_state() {
@@ -22,6 +25,10 @@ public:
       return _button_state;
     }
     return NONE;
+  }
+
+  bool hold() {
+    return _long_press_done;
   }
 
   void tick() {
@@ -41,7 +48,7 @@ public:
           _long_press_done = true;
         }
       }
-    } else { // Handle simple click when the button released
+    } else {  // Handle simple click when the button released
       _long_press_done = false;
       if (_pressed) {
         _button_state = CLICK;
