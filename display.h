@@ -11,10 +11,14 @@
 
 #define OLED_RESET -1
 
+#define NUMBER_OF_SCREENS 3
+
 #define NO_SCREEN_SELECTED 0x0
 #define SCREEN_SCHEDULE 0x1
 #define SCREEN_SET_TIME 0x2
 #define SCREEN_TRIGGER 0x3
+#define SCREEN_CONFIG 0x4
+#define SCREEN_NO_WATER 0x5
 
 // Schedule Update Status
 #define SCHEDULE_IS_SAVED_NO_HINT 0x0
@@ -73,6 +77,17 @@ const unsigned char icon_trigger[] PROGMEM = {
   0x00, 0x1f, 0xff, 0xc0, 0x00, 0x0f, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+const unsigned char icon_config[] PROGMEM = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xe0, 0x00, 0x00, 0x0f, 0xf0, 0x00, 0x00, 0x0f, 0xf0, 0x00,
+  0x00, 0x0f, 0xf0, 0x00, 0x00, 0x1f, 0xf8, 0x00, 0x0e, 0x7f, 0xfe, 0x78, 0x1f, 0xff, 0xff, 0xfc,
+  0x3f, 0xff, 0xff, 0xfc, 0x7f, 0xff, 0xff, 0xfe, 0x7f, 0xfc, 0x3f, 0xfe, 0x7f, 0xf0, 0x0f, 0xfe,
+  0x3f, 0xe0, 0x07, 0xfc, 0x1f, 0xc0, 0x03, 0xf8, 0x0f, 0xc0, 0x03, 0xf0, 0x0f, 0xc0, 0x03, 0xf0,
+  0x0f, 0xc0, 0x03, 0xf0, 0x0f, 0xc0, 0x03, 0xf0, 0x1f, 0xc0, 0x03, 0xf8, 0x3f, 0xe0, 0x07, 0xfc,
+  0x7f, 0xf0, 0x0f, 0xfe, 0x7f, 0xfc, 0x3f, 0xfe, 0x7f, 0xff, 0xff, 0xfe, 0x3f, 0xff, 0xff, 0xfc,
+  0x1f, 0xff, 0xff, 0xfc, 0x0e, 0x7f, 0xfe, 0x78, 0x00, 0x1f, 0xf8, 0x00, 0x00, 0x0f, 0xf0, 0x00,
+  0x00, 0x0f, 0xf0, 0x00, 0x00, 0x0f, 0xf0, 0x00, 0x00, 0x07, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 
 
 class Display {
@@ -80,11 +95,14 @@ public:
   typedef DateTimeInfo (*Callback)();
   typedef void (*ApplyDateTimeCallback)(DateTimeInfo);
   typedef void (*SaveSchedule)(uint8_t);
+  typedef void (*SaveConfig)();
   ScheduleSet* schedule_sets = nullptr;
+  Config* config = nullptr;
 
   Callback get_current_datetime = nullptr;
   ApplyDateTimeCallback apply_datetime = nullptr;
   SaveSchedule save_schedule = nullptr;
+  SaveConfig save_config = nullptr;
   bool replace_battery_message = false;
   bool trigger_run = false;
   uint8_t selected_outlet = 0;
@@ -110,24 +128,19 @@ public:
     delay(1000);
     invalidate();
   }
-  uint32_t _throughput_timestamp = 0;
-  uint32_t _time = 0;
-  uint32_t l = 0;
-  uint32_t buff = 0;
-  float _throughput = 0;
 
   void print_thoughtput(void) {
     if (_throughput_timestamp == 0)
       _throughput_timestamp = millis();
     else {
-      _time = millis() - _throughput_timestamp;
+      _time = (uint32_t)(millis() - _throughput_timestamp);
 
       if (_time < 500)  // Ignore until the motor starts working
         return;
       _time = _time + buff - 500;
 
       if (millis() - l >= 900) {
-        _throughput = (_time / 1000) * THROUGHPUT;
+        _throughput = (_time / 1000) * config->throughput;
         invalidate();
         l = millis();
       }
@@ -147,8 +160,36 @@ public:
     l = 0;
   }
 
+  void show_no_water(bool active) {
+    _screen_no_water_update_time = 0;
+    if (active) {
+      _wake_up();
+      _screen = SCREEN_NO_WATER;
+      invalidate();
+    } else {
+      _screen_locked = true;
+      _screen = NO_SCREEN_SELECTED;
+      invalidate();
+    }
+  }
+
+  void disable() {
+    if (_disabled)
+      return;
+    _disabled = true;
+    if (!_sleep_mode)
+      invalidate();
+  }
+  void enable() {
+    if (!_disabled)
+      return;
+    _disabled = false;
+    if (!_sleep_mode)
+      invalidate();
+  }
+
   void left() {
-    if (_last_active_time == 0 || _screen_locked) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
       invalidate();
       return;
     }
@@ -179,19 +220,25 @@ public:
         _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
         _schedule_set--;
       }
+    } else if (_screen == SCREEN_CONFIG) {
+      if (_config_edit_mode) {
+        _update_config_value(true);
+      } else if (_config_cursor > 0) {
+        _config_cursor--;
+      }
     }
 
     invalidate();
   }
 
   void right() {
-    if (_last_active_time == 0 || _screen_locked) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
       invalidate();
       return;
     }
 
     if (_screen == NO_SCREEN_SELECTED) {
-      if (_screen_select_cursor < 2)
+      if (_screen_select_cursor < NUMBER_OF_SCREENS)
         _screen_select_cursor++;
     } else if (_screen == SCREEN_SET_TIME) {
       if (_edit_datetime_value) {
@@ -216,16 +263,23 @@ public:
         _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
         _schedule_set++;
       }
+    } else if (_screen == SCREEN_CONFIG) {
+      if (_config_edit_mode) {
+        _update_config_value(false);
+      } else if (_config_cursor < 1) {
+        _config_cursor++;
+      }
     }
 
     invalidate();
   }
 
   void click() {
-    if (_last_active_time == 0 || _screen_locked) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
       invalidate();
       return;
     }
+
     if (_screen == NO_SCREEN_SELECTED) {
       _screen = _screen_select_cursor + 1;  // Curson starts with 0 but screen id starts from 1
     } else if (_screen == SCREEN_SET_TIME) {
@@ -243,13 +297,15 @@ public:
         _edit = false;
       }
       _active_schedule_set_cursor = true;
+    } else if (_screen == SCREEN_CONFIG) {
+      _config_edit_mode = !_config_edit_mode;
     }
 
     invalidate();
   }
 
   void long_click() {
-    if (_last_active_time == 0 || _sleep_mode) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _sleep_mode || _disabled) {  // If the display is in speeping mode, just activate
       invalidate();
       return;
     }
@@ -271,26 +327,35 @@ public:
       } else {
         _screen = NO_SCREEN_SELECTED;
         _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
+        _schedule_set = 0;
       }
+    } else if (_screen == SCREEN_CONFIG) {
+      save_config();
+      _screen = NO_SCREEN_SELECTED;
+      _config_cursor = 0;
     }
 
     invalidate();
   }
 
-  void run(void) {
+  void tick(void) {
+    if (_screen == SCREEN_NO_WATER && millis() - _screen_no_water_update_time >= 10000) {
+      invalidate();
+      _screen_no_water_update_time = millis();
+    }
+
     if (!_sleep_mode && _last_active_time != 0 && millis() - _last_active_time >= 10000) {
-      _display.ssd1306_command(SSD1306_DISPLAYOFF);
+      _sleep();
       _last_active_time = 0;
-      _sleep_mode = true;
       _screen_locked = true;
       return;
     }
+
     trigger_run = !_screen_locked && _screen == SCREEN_TRIGGER;
 
     if (_invalidate) {
       if (_sleep_mode) {
-        _display.ssd1306_command(SSD1306_DISPLAYON);
-        _sleep_mode = false;
+        _wake_up();
       }
       _draw();
       _invalidate = false;
@@ -318,9 +383,39 @@ private:
   uint8_t _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
 
   bool active = true;
+
+  uint32_t _throughput_timestamp = 0;
+  uint32_t _time = 0;
+  uint32_t l = 0;
+  uint32_t buff = 0;
+  float _throughput = 0;
+
+  uint32_t _screen_no_water_update_time = 0;
+
+  bool _disabled = false;
+
+  uint8_t _config_cursor = 0;
+  bool _config_edit_mode = false;
+
+  void _wake_up(void) {
+    _display.ssd1306_command(SSD1306_DISPLAYON);
+    _sleep_mode = false;
+  }
+
+  void _sleep() {
+    _display.ssd1306_command(SSD1306_DISPLAYOFF);
+    _sleep_mode = true;
+  }
+
   void _draw() {
     _display.clearDisplay();
-    if (_screen_locked) {
+    if (_screen == SCREEN_NO_WATER) {
+      _draw_time_in_bar();
+      _draw_no_water_screen();
+    } else if (_disabled) {
+      _draw_time_in_bar();
+      _draw_screen_disabled();
+    } else if (_screen_locked) {
       _draw_time_in_bar();
       _draw_locked_screen();
     } else if (_screen == NO_SCREEN_SELECTED) {
@@ -332,8 +427,29 @@ private:
       _draw_time_config();
     } else if (_screen == SCREEN_TRIGGER) {
       _draw_trigger();
+    } else if (_screen == SCREEN_CONFIG) {
+      _draw_config();
     }
     _display.display();
+  }
+
+  void _draw_screen_disabled() {
+    _display.setTextSize(1);
+    _display.setTextColor(SSD1306_WHITE);
+    _display.setCursor(16, 18);
+    _display.println(F("Screen disabled!"));
+    _display.setCursor(22, 36);
+    _display.println(F("Please wait..."));
+  }
+
+  void _draw_no_water_screen(void) {
+    _display.setTextSize(2);
+    _display.setTextColor(SSD1306_WHITE);
+    _display.setCursor(10, 20);
+    _display.println(F("No Water!"));
+    _display.setCursor(8, 48);
+    _display.setTextSize(1);
+    _display.println(F("Refill and press O"));
   }
 
   void _draw_menu() {
@@ -352,13 +468,17 @@ private:
       _display.drawBitmap(48, 17, icon_trigger, 32, 32, WHITE);
       _display.setCursor(43, 52);
       _display.println(F("Trigger"));
+    } else if (_screen_select_cursor == 3) {
+      _display.drawBitmap(48, 17, icon_config, 32, 32, WHITE);
+      _display.setCursor(19, 52);
+      _display.println(F("Advanced Config"));
     }
 
     if (_screen_select_cursor > 0) {
       _display.fillTriangle(2, 32, 12, 22, 12, 42, WHITE);
     }
 
-    if (_screen_select_cursor < 2) {
+    if (_screen_select_cursor < NUMBER_OF_SCREENS) {
       _display.fillTriangle(126, 32, 116, 22, 116, 42, WHITE);
     }
   }
@@ -413,7 +533,7 @@ private:
     _display.setCursor(15, 51);
     _display.println(F("Volume:       "));
     _display.setCursor(57, 51);
-    float v = schedule->volume * 0.05;
+    float v = schedule->volume * VOLUME_SCALE;
     _display.print(v, 2);
 
     _display.setCursor(schedule->volume >= 200 ? 89 : 83, 51);
@@ -465,9 +585,46 @@ private:
       _display.drawRect(x, y, w, 11, SSD1306_INVERSE);
   }
 
+  void _draw_config() {
+    _display.setTextSize(1);
+    _display.setTextColor(SSD1306_WHITE);
+    _display.setCursor(0, 0);
+    _display.println(F("< Config"));
+
+    _display.setCursor(2, 18);
+    _display.println(F("WCD:    sec"));
+    _display.setCursor(config->water_check_inverval > 9 ? 32 : 38, 18);
+    _display.println(config->water_check_inverval);
+
+    _display.setCursor(2, 27);
+    _display.println(F("THPT:       L/sec"));
+    _display.setCursor(38, 27);
+    _display.println(config->throughput, 3);
+
+    uint8_t x, y, w;
+
+    if (_config_cursor == 0) {
+      y = 16;
+      x = config->water_check_inverval > 9 ? 30 : 36;
+      w = config->water_check_inverval > 9 ? 15 : 9;
+    } else if (_config_cursor == 1) {
+      y = 25;
+      x = 36;
+      w = 32;
+    }
+
+    if (_config_edit_mode)
+      _display.fillRect(x, y, w, 11, SSD1306_INVERSE);
+    else
+      _display.drawRect(x, y, w, 11, SSD1306_INVERSE);
+
+    _display.setCursor(7, 52);
+    _display.println(F("< Hold O to apply >"));
+  }
+
   void _save_schedule(void) {
     if (_schedule_change_status == SCHEDULE_UNSAVED) {
-      save_schedule(selected_outlet);
+      save_schedule(_schedule_set);
     }
     _schedule_change_status = SCHEDULE_SAVED;
     _schedule_set_cursor = 0;
@@ -517,13 +674,29 @@ private:
       if (decrease) {
         if (new_volume > 0)
           new_volume--;
-        else new_volume = 200;
+        else new_volume = MAX_VOLUME;
       } else {
-        if (new_volume < 200)
+        if (new_volume < MAX_VOLUME)
           new_volume++;
         else new_volume = 0;
       }
       schedule->volume = new_volume;
+    }
+  }
+
+  void _update_config_value(bool decrease) {
+    if (decrease) {
+      if (_config_cursor == 0 && config->water_check_inverval > 3) {  // Water Check Duration
+        config->water_check_inverval--;
+      } else if (_config_cursor == 1 && config->throughput > MIN_CONFIG_THROUGHPUT) {  // THROUGHPUT
+        config->throughput -= 0.001;
+      }
+    } else {
+      if (_config_cursor == 0 && config->water_check_inverval < 60) {  // Water Check Duration
+        config->water_check_inverval++;
+      } else if (_config_cursor == 1 && config->throughput < MAX_CONFIG_THROUGHPUT) {  // THROUGHPUT
+        config->throughput += 0.001;
+      }
     }
   }
 
