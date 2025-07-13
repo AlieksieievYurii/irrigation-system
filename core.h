@@ -118,7 +118,7 @@ public:
       _volume = _queue[_head].volume;
       _head = (_head + 1) % OUTLETS;
       _count--;
-      uint32_t duration = ((_volume * VOLUME_SCALE) / config->throughput * 1000) + DELAY_BEFORE_PUMPING;  // Compansate the delay
+      uint32_t duration = ((_volume * VOLUME_SCALE) / config->throughput * 1000) + DELAY_BEFORE_PUMPING;  // Compensate the delay
       _stop_time = millis() + duration;
       Serial.printf("It will take: %d s\n", (long)(_stop_time - millis()) / 1000);
     }

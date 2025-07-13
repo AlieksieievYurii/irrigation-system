@@ -129,7 +129,7 @@ public:
     invalidate();
   }
 
-  void print_thoughtput(void) {
+  void print_throughput(void) {
     if (_throughput_timestamp == 0)
       _throughput_timestamp = millis();
     else {
@@ -189,7 +189,7 @@ public:
   }
 
   void left() {
-    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in sleeping mode, just activate
       invalidate();
       return;
     }
@@ -232,7 +232,7 @@ public:
   }
 
   void right() {
-    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in sleeping mode, just activate
       invalidate();
       return;
     }
@@ -275,7 +275,7 @@ public:
   }
 
   void click() {
-    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _screen_locked || _disabled) {  // If the display is in sleeping mode, just activate
       invalidate();
       return;
     }
@@ -305,7 +305,7 @@ public:
   }
 
   void long_click() {
-    if (_last_active_time == 0 || _sleep_mode || _disabled) {  // If the display is in speeping mode, just activate
+    if (_last_active_time == 0 || _sleep_mode || _disabled) {  // If the display is in sleeping mode, just activate
       invalidate();
       return;
     }
@@ -593,8 +593,8 @@ private:
 
     _display.setCursor(2, 18);
     _display.println(F("WCD:    sec"));
-    _display.setCursor(config->water_check_inverval > 9 ? 32 : 38, 18);
-    _display.println(config->water_check_inverval);
+    _display.setCursor(config->water_check_interval > 9 ? 32 : 38, 18);
+    _display.println(config->water_check_interval);
 
     _display.setCursor(2, 27);
     _display.println(F("THPT:       L/sec"));
@@ -605,8 +605,8 @@ private:
 
     if (_config_cursor == 0) {
       y = 16;
-      x = config->water_check_inverval > 9 ? 30 : 36;
-      w = config->water_check_inverval > 9 ? 15 : 9;
+      x = config->water_check_interval > 9 ? 30 : 36;
+      w = config->water_check_interval > 9 ? 15 : 9;
     } else if (_config_cursor == 1) {
       y = 25;
       x = 36;
@@ -686,14 +686,14 @@ private:
 
   void _update_config_value(bool decrease) {
     if (decrease) {
-      if (_config_cursor == 0 && config->water_check_inverval > 3) {  // Water Check Duration
-        config->water_check_inverval--;
+      if (_config_cursor == 0 && config->water_check_interval > 3) {  // Water Check Duration
+        config->water_check_interval--;
       } else if (_config_cursor == 1 && config->throughput > MIN_CONFIG_THROUGHPUT) {  // THROUGHPUT
         config->throughput -= 0.001;
       }
     } else {
-      if (_config_cursor == 0 && config->water_check_inverval < 60) {  // Water Check Duration
-        config->water_check_inverval++;
+      if (_config_cursor == 0 && config->water_check_interval < 60) {  // Water Check Duration
+        config->water_check_interval++;
       } else if (_config_cursor == 1 && config->throughput < MAX_CONFIG_THROUGHPUT) {  // THROUGHPUT
         config->throughput += 0.001;
       }
@@ -793,19 +793,19 @@ private:
 
     uint8_t x, w;
 
-    if (_config_time_select == 1) {  // Highligh Year
+    if (_config_time_select == 1) {  // Highlight Year
       x = 8;
       w = 27;
-    } else if (_config_time_select == 2) {  // Highligh Month
+    } else if (_config_time_select == 2) {  // Highlight Month
       x = 38;
       w = 15;
-    } else if (_config_time_select == 3) {  // Highligh Day
+    } else if (_config_time_select == 3) {  // Highlight Day
       x = 56;
       w = 15;
-    } else if (_config_time_select == 4) {  // Highligh Hour
+    } else if (_config_time_select == 4) {  // Highlight Hour
       x = 74;
       w = 15;
-    } else if (_config_time_select == 5) {  // Highligh Minute
+    } else if (_config_time_select == 5) {  // Highlight Minute
       x = 92;
       w = 15;
     }

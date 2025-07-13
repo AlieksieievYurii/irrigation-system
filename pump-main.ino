@@ -30,7 +30,7 @@ struct DateTimeInfo {
 
 struct ScheduleSet {
   uint16_t days;
-  uint16_t volume;  // In order to calculate actuall volume of water, multiply by VOLUME_SCALE
+  uint16_t volume;  // In order to calculate actual volume of water, multiply by VOLUME_SCALE
   uint8_t hour;
   uint8_t minute;
   bool active;
@@ -39,7 +39,7 @@ struct ScheduleSet {
 };
 
 struct Config {
-  uint8_t water_check_inverval;
+  uint8_t water_check_interval;
   float throughput;
   uint16_t _crc;
 };
@@ -63,7 +63,7 @@ Button ok_button(OK_BUTTON_PIN);
 RTC_DS1307 rtc;
 Core core;
 
-ScheduleSet shechule_sets[OUTLETS] = {};
+ScheduleSet schedule_sets[OUTLETS] = {};
 
 volatile uint32_t check_schedule_timestamp = 0;
 volatile bool water_is_done = false;
@@ -116,8 +116,8 @@ void save_schedule_set(uint8_t outlet, ScheduleSet* data) {
 }
 
 void save_config() {
-  Serial.printf("Save config: WCI: %d\n", config.water_check_inverval);
-  Sensor.set_check_inverval(config.water_check_inverval);
+  Serial.printf("Save config: WCI: %d\n", config.water_check_interval);
+  Sensor.set_check_interval(config.water_check_interval);
   config._crc = 0;
   uint16_t crc = crc16((uint8_t*)&config, sizeof(Config));
   config._crc = crc;
@@ -133,12 +133,12 @@ void load_config() {
 
   if (stored_crc != calc_crc) {
     Serial.println("Config CRC mismatch. Reinit");
-    config.water_check_inverval = 5;
+    config.water_check_interval = 5;
     config.throughput = DEFAULT_THROUGHPUT;
     save_config();
     return;
   }
-  Serial.printf("Load config: WCI: %d\n", config.water_check_inverval);
+  Serial.printf("Load config: WCI: %d\n", config.water_check_interval);
   config._crc = stored_crc;  // Restore CRC field
 }
 
@@ -163,7 +163,7 @@ ScheduleSet get_schedule_set(uint8_t outlet) {
 }
 
 void save_schedule(uint8_t outlet) {
-  ScheduleSet* schedule = &shechule_sets[outlet];
+  ScheduleSet* schedule = &schedule_sets[outlet];
   save_schedule_set(outlet, schedule);
   Serial.printf("Saved Schedule> O: %d; A: %d; D: %d; H: %d, M: %d; V: %d; T: %d\n", outlet,
                 schedule->active,
@@ -203,20 +203,20 @@ void setup() {
   Display.apply_datetime = apply_datetime;
 
   load_config();
-  Sensor.set_check_inverval(config.water_check_inverval);
+  Sensor.set_check_interval(config.water_check_interval);
 
   for (uint8_t i = 0; i < OUTLETS; i++) {
-    shechule_sets[i] = get_schedule_set(i);
+    schedule_sets[i] = get_schedule_set(i);
     Serial.printf("Loaded Schedule> O: %d; A: %d; D: %d; H: %d, M: %d; V: %d; T: %d\n", i,
-                  shechule_sets[i].active,
-                  shechule_sets[i].days,
-                  shechule_sets[i].hour,
-                  shechule_sets[i].minute,
-                  shechule_sets[i].volume,
-                  shechule_sets[i]._timestamp_days);
+                  schedule_sets[i].active,
+                  schedule_sets[i].days,
+                  schedule_sets[i].hour,
+                  schedule_sets[i].minute,
+                  schedule_sets[i].volume,
+                  schedule_sets[i]._timestamp_days);
   }
 
-  Display.schedule_sets = shechule_sets;
+  Display.schedule_sets = schedule_sets;
   Display.save_schedule = save_schedule;
   Display.config = &config;
   Display.save_config = save_config;
@@ -231,7 +231,7 @@ void loop() {
     DateTime now = rtc.now();
     uint32_t days_time = get_days_time();
     for (uint8_t outlet = 0; outlet < OUTLETS; outlet++) {
-      ScheduleSet* schedule = &shechule_sets[outlet];
+      ScheduleSet* schedule = &schedule_sets[outlet];
       if (!schedule->active)
         continue;
 
@@ -270,7 +270,7 @@ void loop() {
     if (ok_button.hold()) {
       Sensor.start_measuring();
       core.start_pumping(Display.selected_outlet);
-      Display.print_thoughtput();
+      Display.print_throughput();
     } else {
       Sensor.stop_measuring();
       core.stop_pumping();

@@ -27,9 +27,9 @@ public:
     _low_count = 0;
   }
 
-  void set_check_inverval(uint8_t inverval_in_sec) {
-    _check_inverval = inverval_in_sec * 1000;
-    _samples_per_inverval = _check_inverval / SAMPLE_INTERVAL_MS;
+  void set_check_interval(uint8_t interval_in_sec) {
+    _check_interval = interval_in_sec * 1000;
+    _samples_per_interval = _check_interval / SAMPLE_INTERVAL_MS;
   }
 
   void stop_measuring() {
@@ -53,9 +53,9 @@ public:
       _sample_timestamp = millis();
     }
 
-    if (millis() - _check_timestamp >= _check_inverval) {
-      float low_ration = (float)_low_count / _samples_per_inverval;
-      float high_ration = (float)_high_count / _samples_per_inverval;
+    if (millis() - _check_timestamp >= _check_interval) {
+      float low_ration = (float)_low_count / _samples_per_interval;
+      float high_ration = (float)_high_count / _samples_per_interval;
       if (high_ration > low_ration)
         _water_present = false;
       else
@@ -70,8 +70,8 @@ private:
   uint32_t _sample_timestamp = 0;
   uint32_t _low_count = 0;
   uint32_t _high_count = 0;
-  uint32_t _check_inverval = 5000;
-  float _samples_per_inverval;
+  uint32_t _check_interval = 5000;
+  float _samples_per_interval;
   bool _water_present = true;
   bool _measure = false;
 };
