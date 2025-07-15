@@ -11,14 +11,15 @@
 
 #define OLED_RESET -1
 
-#define NUMBER_OF_SCREENS 3
+#define NUMBER_OF_SCREENS 4
 
 #define NO_SCREEN_SELECTED 0x0
 #define SCREEN_SCHEDULE 0x1
-#define SCREEN_SET_TIME 0x2
-#define SCREEN_TRIGGER 0x3
-#define SCREEN_CONFIG 0x4
-#define SCREEN_NO_WATER 0x5
+#define SCREEN_FORECAST 0x2
+#define SCREEN_SET_TIME 0x3
+#define SCREEN_TRIGGER 0x4
+#define SCREEN_CONFIG 0x5
+#define SCREEN_NO_WATER 0x6
 
 // Schedule Update Status
 #define SCHEDULE_IS_SAVED_NO_HINT 0x0
@@ -88,11 +89,23 @@ const unsigned char icon_config[] PROGMEM = {
   0x00, 0x0f, 0xf0, 0x00, 0x00, 0x0f, 0xf0, 0x00, 0x00, 0x07, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+const unsigned char icon_forecast[] PROGMEM = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xff, 0xff, 0xe0,
+  0x0f, 0xff, 0xff, 0xf0, 0x1f, 0xff, 0xff, 0xf8, 0x1f, 0xff, 0xff, 0xf8, 0x1e, 0x00, 0x00, 0x78,
+  0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0xff, 0x78, 0x1e, 0x00, 0xff, 0x78, 0x1e, 0x00, 0xff, 0x78,
+  0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78, 0x1e, 0x0f, 0xf0, 0x78,
+  0x1e, 0x0f, 0xf0, 0x78, 0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78,
+  0x1e, 0xff, 0x00, 0x78, 0x1e, 0xff, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78, 0x1e, 0x00, 0x00, 0x78,
+  0x1e, 0x00, 0x00, 0x78, 0x1f, 0xff, 0xff, 0xf8, 0x1f, 0xff, 0xff, 0xf8, 0x0f, 0xff, 0xff, 0xf0,
+  0x07, 0xff, 0xff, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 
 
 class Display {
 public:
   typedef DateTimeInfo (*Callback)();
+  typedef uint32_t (*Days)();
   typedef void (*ApplyDateTimeCallback)(DateTimeInfo);
   typedef void (*SaveSchedule)(uint8_t);
   typedef void (*SaveConfig)();
@@ -100,6 +113,7 @@ public:
   Config* config = nullptr;
 
   Callback get_current_datetime = nullptr;
+  Days get_days_time = nullptr;
   ApplyDateTimeCallback apply_datetime = nullptr;
   SaveSchedule save_schedule = nullptr;
   SaveConfig save_config = nullptr;
@@ -220,6 +234,10 @@ public:
         _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
         _schedule_set--;
       }
+    } else if (_screen == SCREEN_FORECAST) {
+      if (_forecast_schedule > 0) {
+        _forecast_schedule--;
+      }
     } else if (_screen == SCREEN_CONFIG) {
       if (_config_edit_mode) {
         _update_config_value(true);
@@ -263,6 +281,10 @@ public:
         _schedule_change_status = SCHEDULE_IS_SAVED_NO_HINT;
         _schedule_set++;
       }
+    } else if (_screen == SCREEN_FORECAST) {
+      if (_forecast_schedule < OUTLETS - 1) {
+        _forecast_schedule++;
+      }
     } else if (_screen == SCREEN_CONFIG) {
       if (_config_edit_mode) {
         _update_config_value(false);
@@ -299,6 +321,9 @@ public:
       _active_schedule_set_cursor = true;
     } else if (_screen == SCREEN_CONFIG) {
       _config_edit_mode = !_config_edit_mode;
+    } else if (_screen == SCREEN_FORECAST) {
+      _screen = NO_SCREEN_SELECTED;
+      _forecast_schedule = 0;
     }
 
     invalidate();
@@ -397,6 +422,8 @@ private:
   uint8_t _config_cursor = 0;
   bool _config_edit_mode = false;
 
+  uint8_t _forecast_schedule = 0;
+
   void _wake_up(void) {
     _display.ssd1306_command(SSD1306_DISPLAYON);
     _sleep_mode = false;
@@ -423,6 +450,8 @@ private:
       _draw_menu();
     } else if (_screen == SCREEN_SCHEDULE) {
       _draw_screen_schedule();
+    } else if (_screen == SCREEN_FORECAST) {
+      _draw_screen_forecast();
     } else if (_screen == SCREEN_SET_TIME) {
       _draw_time_config();
     } else if (_screen == SCREEN_TRIGGER) {
@@ -431,6 +460,58 @@ private:
       _draw_config();
     }
     _display.display();
+  }
+
+  void _draw_screen_forecast() {
+    _display.setTextSize(1);
+    _display.setTextColor(SSD1306_WHITE);
+    _display.setCursor(0, 0);
+    _display.println(F("< Forecast"));
+
+    _display.setTextSize(2);
+    _display.setCursor(30, 16);
+    char character = (char)65 + _forecast_schedule;
+    _display.print(character);
+
+    _display.setTextSize(1);
+    uint32_t today = get_days_time();
+    ScheduleSet* schedule = &schedule_sets[_forecast_schedule];
+
+    _display.setTextSize(2);
+    _display.setCursor(72, 16);
+    _display.println(F(schedule->active ? "ON" : "OFF"));
+
+    uint32_t days_diff = (today > schedule->_timestamp_days)
+                           ? (today - schedule->_timestamp_days)
+                           : (schedule->_timestamp_days - today);
+
+    uint32_t next = 0;
+    if (days_diff == 0){
+      next = schedule->_timestamp_days + schedule->days;
+    }else {
+      uint32_t delta = days_diff % schedule->days;
+      next = (delta != 0 ? today + (schedule->days - delta) : today);
+    }
+
+    _display.setTextSize(1);
+    for (uint8_t i = 0; i < 3; i++) {
+      _display.setCursor(16, 36 + (9 * i));
+      uint32_t next_trigger = next + i * schedule->days;
+      if (next_trigger == today) {
+        _display.printf("Today at  %d:%d", schedule->hour, schedule->minute);
+      } else {
+        DateTime date = DateTime((next_trigger * SECONDS_PER_DAY) + SECONDS_FROM_1970_TO_2000);
+        _display.printf("%d.%d.%d %d:%d", date.year(), date.month(), date.day(), schedule->hour, schedule->minute);
+      }
+    }
+
+    if (_forecast_schedule > 0) {
+      _display.fillTriangle(0, 32, 10, 22, 10, 42, WHITE);
+    }
+
+    if (_forecast_schedule < OUTLETS - 1) {
+      _display.fillTriangle(127, 32, 117, 22, 117, 42, WHITE);
+    }
   }
 
   void _draw_screen_disabled() {
@@ -456,22 +537,27 @@ private:
     _display.setTextSize(1);
     _display.setTextColor(SSD1306_WHITE);
 
-    if (_screen_select_cursor == 0) {
+    uint8_t screen = _screen_select_cursor + 1;
+    if (screen == SCREEN_SCHEDULE) {
       _display.drawBitmap(48, 17, icon_schedule, 32, 32, WHITE);
       _display.setCursor(40, 52);
       _display.println(F("Schedule"));
-    } else if (_screen_select_cursor == 1) {
+    } else if (screen == SCREEN_SET_TIME) {
       _display.drawBitmap(48, 17, icon_time, 32, 32, WHITE);
       _display.setCursor(40, 52);
       _display.println(F("Set time"));
-    } else if (_screen_select_cursor == 2) {
+    } else if (screen == SCREEN_TRIGGER) {
       _display.drawBitmap(48, 17, icon_trigger, 32, 32, WHITE);
       _display.setCursor(43, 52);
       _display.println(F("Trigger"));
-    } else if (_screen_select_cursor == 3) {
+    } else if (screen == SCREEN_CONFIG) {
       _display.drawBitmap(48, 17, icon_config, 32, 32, WHITE);
       _display.setCursor(19, 52);
       _display.println(F("Advanced Config"));
+    } else if (screen == SCREEN_FORECAST) {
+      _display.drawBitmap(48, 17, icon_forecast, 32, 32, WHITE);
+      _display.setCursor(40, 52);
+      _display.println(F("Forecast"));
     }
 
     if (_screen_select_cursor > 0) {
@@ -592,7 +678,7 @@ private:
     _display.println(F("< Config"));
 
     _display.setCursor(2, 18);
-    _display.println(F("WCD:    sec"));
+    _display.println(F("WCI:    sec"));
     _display.setCursor(config->water_check_interval > 9 ? 32 : 38, 18);
     _display.println(config->water_check_interval);
 
@@ -686,13 +772,13 @@ private:
 
   void _update_config_value(bool decrease) {
     if (decrease) {
-      if (_config_cursor == 0 && config->water_check_interval > 3) {  // Water Check Duration
+      if (_config_cursor == 0 && config->water_check_interval > 3) {  // Water Check Interval
         config->water_check_interval--;
       } else if (_config_cursor == 1 && config->throughput > MIN_CONFIG_THROUGHPUT) {  // THROUGHPUT
         config->throughput -= 0.001;
       }
     } else {
-      if (_config_cursor == 0 && config->water_check_interval < 60) {  // Water Check Duration
+      if (_config_cursor == 0 && config->water_check_interval < 60) {  // Water Check Interval
         config->water_check_interval++;
       } else if (_config_cursor == 1 && config->throughput < MAX_CONFIG_THROUGHPUT) {  // THROUGHPUT
         config->throughput += 0.001;

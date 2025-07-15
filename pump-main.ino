@@ -7,12 +7,13 @@
 #include "sensor.h"
 
 // =========== Setup ============
-#define OUTLETS 14                // A B C D
+#define OUTLETS 4                 // A B C D
 #define DEFAULT_THROUGHPUT 0.013  // L/second
+#define DEFAULT_WCI 5             // seconds
 #define MAX_CONFIG_THROUGHPUT 0.030
 #define MIN_CONFIG_THROUGHPUT 0.010
-#define MAX_VOLUME 200            // Maximum of liters that can be set in schedule
-#define VOLUME_SCALE 0.05         // Multiply by volume
+#define MAX_VOLUME 200     // Maximum of liters that can be set in schedule
+#define VOLUME_SCALE 0.05  // Multiply by volume
 // ==============================
 
 #if OUTLETS > 16
@@ -44,9 +45,9 @@ struct Config {
   uint16_t _crc;
 };
 
-Config config = { 5, DEFAULT_THROUGHPUT, 0 };  // Default values
+Config config = { DEFAULT_WCI, DEFAULT_THROUGHPUT, 0 };  // Default values
 
-#define EEPROM_SIZE 512 
+#define EEPROM_SIZE 512
 #include "display.h"
 #include "core.h"
 
@@ -200,6 +201,7 @@ void setup() {
   }
 
   Display.get_current_datetime = get_current_datetime;
+  Display.get_days_time = get_days_time;
   Display.apply_datetime = apply_datetime;
 
   load_config();
@@ -207,7 +209,8 @@ void setup() {
 
   for (uint8_t i = 0; i < OUTLETS; i++) {
     schedule_sets[i] = get_schedule_set(i);
-    Serial.printf("Loaded Schedule> O: %d; A: %d; D: %d; H: %d, M: %d; V: %d; T: %d\n", i,
+    Serial.printf("Loaded Schedule> O: %d; A: %d; D: %d; H: %d, M: %d; V: %d; T: %d\n",
+                  i,
                   schedule_sets[i].active,
                   schedule_sets[i].days,
                   schedule_sets[i].hour,
@@ -240,7 +243,7 @@ void loop() {
                              : (schedule->_timestamp_days - days_time);
 
       // If days_diff == 0 we skip it because at that day the schedule was set
-      if (/*days_diff != 0 &&*/ (schedule->days > 0) && (days_diff % schedule->days == 0)) {
+      if (days_diff != 0 && (schedule->days > 0) && (days_diff % schedule->days == 0)) {
         if (schedule->hour == now.hour() && schedule->minute == now.minute()) {
           // The function is being called many times, but under the hood, it handled one time.
           // After 60 sec the same outlet called be called
