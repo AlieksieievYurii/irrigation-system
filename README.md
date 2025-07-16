@@ -1,5 +1,8 @@
 # 💧 Irrigation System
 
+<img width="1297" height="730" alt="o4-r-front-top" src="https://github.com/user-attachments/assets/d84c1dd3-6e3b-4bad-ac93-1cb43d9899d4" />
+
+
 The Irrigation System is an automated solution designed to manage and optimize the watering of plants or crops.
 It ensures efficient water usage by delivering the right amount of water at the right time, reducing waste and
 promoting healthy plant growth.
